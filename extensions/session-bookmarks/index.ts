@@ -384,8 +384,7 @@ function messageLines(theme: any, state: BookmarkMenuState): string[] {
 	];
 }
 
-function buildMenuLines(theme: any, state: BookmarkMenuState, renderWidth: number, cwd: string | undefined): string[] {
-	const bookmarks = listBookmarks();
+function buildMenuLines(theme: any, bookmarks: Array<SessionBookmark & { summary: SessionSummary }>, state: BookmarkMenuState, renderWidth: number, cwd: string | undefined): string[] {
 	if (bookmarks.length === 0) {
 		return renderBox(theme, [
 			theme.fg("dim", "No Pi sessions are bookmarked yet."),
@@ -472,15 +471,15 @@ async function openBookmarksMenu(ctx: any): Promise<void> {
 
 	await ctx.ui.custom((tui: any, theme: any, _kb: any, done: (value?: void) => void) => {
 		const state: BookmarkMenuState = { paneMode: "overview" };
+		let bookmarks = listBookmarks();
 		let closed = false;
 		const close = () => {
 			if (closed) return;
 			closed = true;
 			done(undefined);
 		};
-		const selectedBookmark = () => listBookmarks().find((bookmark) => bookmark.id === state.selectedId) || listBookmarks()[0];
+		const selectedBookmark = () => bookmarks.find((bookmark) => bookmark.id === state.selectedId) || bookmarks[0];
 		const selectDelta = (delta: number) => {
-			const bookmarks = listBookmarks();
 			if (bookmarks.length === 0) return;
 			const current = Math.max(0, bookmarks.findIndex((bookmark) => bookmark.id === state.selectedId));
 			state.selectedId = bookmarks[Math.max(0, Math.min(bookmarks.length - 1, current + delta))]?.id;
@@ -491,8 +490,8 @@ async function openBookmarksMenu(ctx: any): Promise<void> {
 			const bookmark = selectedBookmark();
 			if (!bookmark) return;
 			removeBookmark(bookmark.id);
-			const remaining = listBookmarks();
-			state.selectedId = remaining[0]?.id;
+			bookmarks = bookmarks.filter((entry) => entry.id !== bookmark.id);
+			state.selectedId = bookmarks[0]?.id;
 			state.paneMode = "message";
 			state.message = `Removed bookmark for ${titleForBookmark(bookmark)}.\nThe session file was not deleted.`;
 			tui.requestRender();
@@ -508,7 +507,7 @@ async function openBookmarksMenu(ctx: any): Promise<void> {
 				if (renderWidth < MENU_MIN_WIDTH) {
 					throw new Error(`/bookmarks requires a terminal at least ${MENU_MIN_WIDTH} columns wide. Current render width: ${renderWidth}.`);
 				}
-				return buildMenuLines(theme, state, renderWidth, currentCwd(ctx));
+				return buildMenuLines(theme, bookmarks, state, renderWidth, currentCwd(ctx));
 			},
 			invalidate() {},
 			handleInput(data: string) {
@@ -529,6 +528,8 @@ async function openBookmarksMenu(ctx: any): Promise<void> {
 				} else if (data === "d" || data === "D") {
 					deleteSelected();
 				} else if (data === "r" || data === "R") {
+					bookmarks = listBookmarks();
+					if (!bookmarks.some((bookmark) => bookmark.id === state.selectedId)) state.selectedId = bookmarks[0]?.id;
 					state.paneMode = "overview";
 					tui.requestRender();
 				} else if (data === "?" || data === "h" || data === "H") {
