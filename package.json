@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Global session bookmarks for pi.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dr-baker/pi-session-bookmarks.git"
+  },
+  "homepage": "https://github.com/dr-baker/pi-session-bookmarks#readme",
+  "bugs": {
+    "url": "https://github.com/dr-baker/pi-session-bookmarks/issues"
+  },
   "keywords": ["pi-package"],
   "files": [
     "extensions",
