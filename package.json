@@ -2,7 +2,7 @@
   "name": "pi-session-bookmarks",
   "version": "0.1.0",
   "type": "module",
-  "description": "Global session bookmarks for pi.",
+  "description": "Bookmark Pi sessions and jump back in from any repo.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dr-baker/pi-session-bookmarks.git"
