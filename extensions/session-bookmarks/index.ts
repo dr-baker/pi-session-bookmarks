@@ -203,6 +203,14 @@ function sessionBookmarkId(summary: SessionSummary): string {
 	return summary.sessionId || realpathSafe(summary.sessionFile);
 }
 
+function findBookmarkForSessionFile(sessionFile: string | undefined): SessionBookmark | undefined {
+	if (!sessionFile) return undefined;
+	const summary = inspectSessionFile(sessionFile);
+	const id = sessionBookmarkId(summary);
+	const resolved = realpathSafe(sessionFile);
+	return Object.values(readBookmarkIndex().bookmarks).find((bookmark) => bookmark.id === id || bookmark.sessionFile === resolved || bookmark.sessionFile === sessionFile);
+}
+
 function upsertBookmark(sessionFile: string, note?: string): SessionBookmark {
 	const summary = inspectSessionFile(sessionFile);
 	const id = sessionBookmarkId(summary);
@@ -279,6 +287,26 @@ function listBookmarks(): Array<SessionBookmark & { summary: SessionSummary }> {
 
 function titleForBookmark(bookmark: SessionBookmark): string {
 	return bookmark.name || bookmark.firstMessage || basename(bookmark.cwd || bookmark.sessionFile) || "Untitled session";
+}
+
+function stripBookmarkStar(name: string | undefined): string {
+	return (name || "").replace(/^★\s*/, "").trim();
+}
+
+function starredSessionName(currentName: string | undefined, bookmark: SessionBookmark): string | undefined {
+	const base = stripBookmarkStar(currentName) || stripBookmarkStar(titleForBookmark(bookmark));
+	return base ? `★ ${base}` : undefined;
+}
+
+function applyBookmarkSessionName(pi: ExtensionAPI, bookmark: SessionBookmark): void {
+	const nextName = starredSessionName(pi.getSessionName(), bookmark);
+	if (nextName && pi.getSessionName() !== nextName) pi.setSessionName(nextName);
+}
+
+function removeBookmarkSessionName(pi: ExtensionAPI): void {
+	const current = pi.getSessionName();
+	const next = stripBookmarkStar(current);
+	if (current && current !== next) pi.setSessionName(next);
 }
 
 function formatAge(iso: string | undefined): string {
@@ -563,20 +591,6 @@ function startupBookmarkSummary(): string | undefined {
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.registerCommand("bookmark-session", {
-		description: "Bookmark the current Pi session globally: /bookmark-session [note]",
-		handler: async (args, ctx) => {
-			await ctx.waitForIdle();
-			const sessionFile = currentSessionFile(ctx);
-			if (!sessionFile) {
-				ctx.ui.notify("This session is not persisted, so it cannot be bookmarked.", "warning");
-				return;
-			}
-			const bookmark = upsertBookmark(sessionFile, args.trim() || undefined);
-			ctx.ui.notify(`Bookmarked: ${titleForBookmark(bookmark)}\nUse /bookmarks to open it later.`, "info");
-		},
-	});
-
 	pi.registerCommand("bookmarks", {
 		description: "Open the global Pi session bookmarks picker.",
 		handler: async (_args, ctx) => {
@@ -585,29 +599,57 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("unbookmark-session", {
-		description: "Remove a session bookmark: /unbookmark-session [id|path] (defaults to current session)",
-		handler: async (args, ctx) => {
-			await ctx.waitForIdle();
-			const target = args.trim() || currentSessionFile(ctx);
-			if (!target) {
-				ctx.ui.notify("No bookmark target provided and this session is not persisted.", "warning");
-				return;
-			}
-			const removed = removeBookmark(target);
-			if (!removed) {
-				ctx.ui.notify("No matching session bookmark found.", "warning");
-				return;
-			}
-			ctx.ui.notify(`Removed bookmark: ${titleForBookmark(removed)}`, "info");
-		},
-	});
-
 	pi.on("session_start", async (event, ctx) => {
-		if (event.reason === "reload" || !ctx.hasUI) return;
-		const summary = startupBookmarkSummary();
-		if (summary) ctx.ui.notify(summary, "info");
-		const count = listBookmarks().length;
-		if (count > 0) ctx.ui.setStatus("session-bookmarks", ctx.ui.theme.fg("accent", `🔖 ${count}`));
+		const sessionFile = currentSessionFile(ctx);
+		const existingBookmark = findBookmarkForSessionFile(sessionFile);
+		if (existingBookmark) {
+			applyBookmarkSessionName(pi, existingBookmark);
+			pi.registerCommand("unbookmark-session", {
+				description: "Remove the bookmark for the current Pi session.",
+				handler: async (_args, ctx) => {
+					await ctx.waitForIdle();
+					const target = currentSessionFile(ctx);
+					if (!target) {
+						ctx.ui.notify("This session is not persisted, so it cannot be unbookmarked.", "warning");
+						return;
+					}
+					const removed = removeBookmark(target);
+					if (!removed) {
+						ctx.ui.notify("No matching session bookmark found.", "warning");
+						return;
+					}
+					removeBookmarkSessionName(pi);
+					ctx.ui.notify(`Removed bookmark: ${titleForBookmark(removed)}`, "info");
+					await ctx.reload();
+					return;
+				},
+			});
+		} else {
+			pi.registerCommand("bookmark-session", {
+				description: "Bookmark the current Pi session globally: /bookmark-session [note]",
+				handler: async (args, ctx) => {
+					await ctx.waitForIdle();
+					const sessionFile = currentSessionFile(ctx);
+					if (!sessionFile) {
+						ctx.ui.notify("This session is not persisted, so it cannot be bookmarked.", "warning");
+						return;
+					}
+					const bookmark = upsertBookmark(sessionFile, args.trim() || undefined);
+					applyBookmarkSessionName(pi, bookmark);
+					ctx.ui.notify(`Bookmarked: ${titleForBookmark(bookmark)}\nUse /bookmarks to open it later.`, "info");
+					await ctx.reload();
+					return;
+				},
+			});
+		}
+
+		if (event.reason !== "reload" && ctx.hasUI) {
+			const summary = startupBookmarkSummary();
+			if (summary) ctx.ui.notify(summary, "info");
+		}
+		if (ctx.hasUI) {
+			const count = listBookmarks().length;
+			ctx.ui.setStatus("session-bookmarks", count > 0 ? ctx.ui.theme.fg("accent", `🔖 ${count}`) : undefined);
+		}
 	});
 }
