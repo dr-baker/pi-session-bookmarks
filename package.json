@@ -6,7 +6,9 @@
   "description": "Global session bookmarks for pi.",
   "keywords": ["pi-package"],
   "files": [
-    "extensions"
+    "extensions",
+    "assets",
+    "README.md"
   ],
   "pi": {
     "extensions": ["./extensions/session-bookmarks"]
