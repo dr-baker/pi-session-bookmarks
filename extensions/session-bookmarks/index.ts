@@ -627,6 +627,11 @@ export default function (pi: ExtensionAPI) {
 
 		if (existingBookmark) {
 			applyBookmarkSessionName(pi, existingBookmark);
+		} else {
+			removeBookmarkSessionName(pi);
+		}
+
+		if (existingBookmark) {
 			pi.registerCommand("unbookmark", {
 				description: "Remove the bookmark for the current Pi session.",
 				handler: async (_args, ctx) => {
