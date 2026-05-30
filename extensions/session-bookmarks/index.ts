@@ -416,7 +416,7 @@ function buildMenuLines(theme: any, bookmarks: Array<SessionBookmark & { summary
 	if (bookmarks.length === 0) {
 		return renderBox(theme, [
 			theme.fg("dim", "No Pi sessions are bookmarked yet."),
-			theme.fg("dim", "Use /bookmark-session [note] to bookmark the current session."),
+			theme.fg("dim", "Use /bookmark [note] to bookmark the current session."),
 		], renderWidth);
 	}
 
@@ -490,11 +490,11 @@ async function switchToBookmark(ctx: any, bookmark: SessionBookmark & { summary:
 
 async function openBookmarksMenu(ctx: any): Promise<void> {
 	if (!ctx.hasUI || typeof ctx.ui?.custom !== "function") {
-		throw new Error("/bookmarks requires interactive UI mode.");
+		throw new Error("/bookmark-list requires interactive UI mode.");
 	}
 	const terminalWidth = process.stdout.columns || 0;
 	if (terminalWidth > 0 && terminalWidth < MENU_MIN_WIDTH) {
-		throw new Error(`/bookmarks requires a terminal at least ${MENU_MIN_WIDTH} columns wide. Current width: ${terminalWidth}.`);
+		throw new Error(`/bookmark-list requires a terminal at least ${MENU_MIN_WIDTH} columns wide. Current width: ${terminalWidth}.`);
 	}
 
 	await ctx.ui.custom((tui: any, theme: any, _kb: any, done: (value?: void) => void) => {
@@ -533,7 +533,7 @@ async function openBookmarksMenu(ctx: any): Promise<void> {
 		return {
 			render(renderWidth: number) {
 				if (renderWidth < MENU_MIN_WIDTH) {
-					throw new Error(`/bookmarks requires a terminal at least ${MENU_MIN_WIDTH} columns wide. Current render width: ${renderWidth}.`);
+					throw new Error(`/bookmark-list requires a terminal at least ${MENU_MIN_WIDTH} columns wide. Current render width: ${renderWidth}.`);
 				}
 				return buildMenuLines(theme, bookmarks, state, renderWidth, currentCwd(ctx));
 			},
@@ -587,24 +587,47 @@ function startupBookmarkSummary(): string | undefined {
 		return `${index + 1}. ${title} — ${cwd} — last ${formatAge(bookmark.lastInteractedAt || bookmark.bookmarkedAt)}`;
 	});
 	const extra = bookmarks.length > STARTUP_BOOKMARK_LIMIT ? `\n… and ${bookmarks.length - STARTUP_BOOKMARK_LIMIT} more` : "";
-	return `Bookmarked Pi sessions (${bookmarks.length}):\n${lines.join("\n")}${extra}\nOpen with /bookmarks.`;
+	return `Bookmarked Pi sessions (${bookmarks.length}):\n${lines.join("\n")}${extra}\nOpen with /bookmark-list.`;
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.registerCommand("bookmarks", {
-		description: "Open the global Pi session bookmarks picker.",
-		handler: async (_args, ctx) => {
-			await ctx.waitForIdle();
-			await openBookmarksMenu(ctx);
-		},
-	});
-
 	pi.on("session_start", async (event, ctx) => {
 		const sessionFile = currentSessionFile(ctx);
 		const existingBookmark = findBookmarkForSessionFile(sessionFile);
+
+		pi.registerCommand("bookmark", {
+			description: "Bookmark the current Pi session globally: /bookmark [note]",
+			handler: async (args, ctx) => {
+				await ctx.waitForIdle();
+				const trimmed = args.trim();
+				if (existingBookmark) {
+					ctx.ui.notify("This session is already bookmarked. Use /unbookmark to remove it, or /bookmark-list to browse bookmarks.", "info");
+					return;
+				}
+				const sessionFile = currentSessionFile(ctx);
+				if (!sessionFile) {
+					ctx.ui.notify("This session is not persisted, so it cannot be bookmarked.", "warning");
+					return;
+				}
+				const bookmark = upsertBookmark(sessionFile, trimmed || undefined);
+				applyBookmarkSessionName(pi, bookmark);
+				ctx.ui.notify(`Bookmarked: ${titleForBookmark(bookmark)}\nUse /bookmark-list to open it later.`, "info");
+				await ctx.reload();
+				return;
+			},
+		});
+
+		pi.registerCommand("bookmark-list", {
+			description: "Open the global Pi session bookmarks picker.",
+			handler: async (_args, ctx) => {
+				await ctx.waitForIdle();
+				await openBookmarksMenu(ctx);
+			},
+		});
+
 		if (existingBookmark) {
 			applyBookmarkSessionName(pi, existingBookmark);
-			pi.registerCommand("unbookmark-session", {
+			pi.registerCommand("unbookmark", {
 				description: "Remove the bookmark for the current Pi session.",
 				handler: async (_args, ctx) => {
 					await ctx.waitForIdle();
@@ -620,23 +643,6 @@ export default function (pi: ExtensionAPI) {
 					}
 					removeBookmarkSessionName(pi);
 					ctx.ui.notify(`Removed bookmark: ${titleForBookmark(removed)}`, "info");
-					await ctx.reload();
-					return;
-				},
-			});
-		} else {
-			pi.registerCommand("bookmark-session", {
-				description: "Bookmark the current Pi session globally: /bookmark-session [note]",
-				handler: async (args, ctx) => {
-					await ctx.waitForIdle();
-					const sessionFile = currentSessionFile(ctx);
-					if (!sessionFile) {
-						ctx.ui.notify("This session is not persisted, so it cannot be bookmarked.", "warning");
-						return;
-					}
-					const bookmark = upsertBookmark(sessionFile, args.trim() || undefined);
-					applyBookmarkSessionName(pi, bookmark);
-					ctx.ui.notify(`Bookmarked: ${titleForBookmark(bookmark)}\nUse /bookmarks to open it later.`, "info");
 					await ctx.reload();
 					return;
 				},
