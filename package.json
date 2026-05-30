@@ -1,7 +1,6 @@
 {
   "name": "pi-session-bookmarks",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Global session bookmarks for pi.",
   "keywords": ["pi-package"],

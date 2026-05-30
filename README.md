@@ -27,14 +27,10 @@ Bookmarks are global, not tied to the current cwd. They are stored at:
 
 ## Quickstart
 
-Install this package locally in Pi settings:
+Install with Pi:
 
-```json
-{
-  "packages": [
-    "~/.pi/agent/packages/pi-session-bookmarks"
-  ]
-}
+```bash
+pi install npm:pi-session-bookmarks
 ```
 
 Then restart Pi or run `/reload`.
