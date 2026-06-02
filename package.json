@@ -1,8 +1,9 @@
 {
   "name": "pi-session-bookmarks",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Bookmark Pi sessions and jump back in from any repo.",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dr-baker/pi-session-bookmarks.git"
@@ -18,7 +19,8 @@
     "README.md"
   ],
   "pi": {
-    "extensions": ["./extensions/session-bookmarks"]
+    "extensions": ["./extensions/session-bookmarks"],
+    "image": "https://cdn.jsdelivr.net/npm/pi-session-bookmarks/assets/bookmark-list.png"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
